@@ -1,4 +1,62 @@
-# pterodactyl-mcp
+# pterodactyl-mcp-extended
+
+A fork of [@zefarie/pterodactyl-mcp](https://www.npmjs.com/package/@zefarie/pterodactyl-mcp) 0.1.0 (MIT) that keeps all 73 upstream tools and adds 22 more, most importantly **binary-safe file uploads** (upstream `write_file` sends text, so schematics, jars and other binary files get corrupted).
+
+The upstream bundle in `dist/index.js` is unchanged apart from a 5-line hook; every addition lives in [`extensions/extra-tools.js`](extensions/extra-tools.js).
+
+## Added tools
+
+| Tool | What it does |
+|---|---|
+| `upload_file` | Upload local files to a server directory via the panel's signed upload URL. Binary-safe, verifies sizes, won't overwrite unless `overwrite: true`, optional `remote_name`. |
+| `upload_file_base64` | Same, from base64 bytes (for clients without local file access). |
+| `download_file_to_local` | Save a server file to a local path (binary-safe). |
+| `pull_file` | Have the node download a URL straight into a server folder. |
+| `copy_file` | Duplicate a file in place. |
+| `chmod_files` | Change file permissions. |
+| `make_directories` | `mkdir -p` for server paths. |
+| `execute_schedule` | Run a schedule now. |
+| `get_backup` / `toggle_backup_lock` | Backup details; lock or unlock a backup. |
+| `list_server_allocations` / `add_server_allocation` / `update_allocation_notes` / `set_primary_allocation` / `remove_server_allocation` | Manage a server's ports from the Client API. |
+| `update_startup_variable` | Change a startup variable (e.g. `SERVER_JARFILE`). |
+| `rename_server` / `set_docker_image` / `reinstall_server_client` | Server settings via the Client API. |
+| `list_client_servers` | Servers the client key can see, with name filter and `type: admin-all`. |
+| `find_servers` | Admin search by name/uuid/external_id/image instead of paging `list_servers`. |
+| `list_locations` | Admin: node locations. |
+
+## Run it locally
+
+```bash
+npm install --omit=dev
+```
+
+Claude Desktop entry (`~/.config/Claude/claude_desktop_config.json`):
+
+```json
+"my-panel": {
+  "command": "/usr/bin/node",
+  "args": ["/absolute/path/to/pterodactyl-mcp/dist/index.js"],
+  "env": {
+    "PTERODACTYL_URL": "https://panel.example.com",
+    "PTERODACTYL_APP_KEY": "ptla_...",
+    "PTERODACTYL_CLIENT_KEY": "ptlc_..."
+  }
+}
+```
+
+## Smoke test
+
+```bash
+node test/smoke.mjs --config ~/.config/Claude/claude_desktop_config.json --server my-panel \
+  --call find_servers '{"query":"lobby"}'
+```
+
+Starts the server over stdio with that entry's env (keys are never printed), lists tools and calls each `--call`.
+
+---
+
+## Upstream README
+
 
 [![npm version](https://img.shields.io/npm/v/@zefarie/pterodactyl-mcp)](https://www.npmjs.com/package/@zefarie/pterodactyl-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)

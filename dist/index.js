@@ -2,6 +2,7 @@
 
 // src/index.ts
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { EXTRA_APP_TOOLS, EXTRA_CLIENT_TOOLS, registerExtraTools } from "../extensions/extra-tools.js";
 
 // src/client/errors.ts
 var PterodactylApiError = class extends Error {
@@ -3958,11 +3959,11 @@ function registerWriteFileTool(server, client) {
 }
 
 // src/version.ts
-var VERSION = "0.1.0";
+var VERSION = "0.2.0-extended";
 
 // src/server.ts
-var APP_TOOLS_COUNT = 34;
-var CLIENT_TOOLS_COUNT = 39;
+var APP_TOOLS_COUNT = 34 + EXTRA_APP_TOOLS;
+var CLIENT_TOOLS_COUNT = 39 + EXTRA_CLIENT_TOOLS;
 function countTools(hasClientKey) {
   return hasClientKey ? APP_TOOLS_COUNT + CLIENT_TOOLS_COUNT : APP_TOOLS_COUNT;
 }
@@ -4046,6 +4047,7 @@ function createServer2(client) {
     registerGetRecentLogsTool(server, client);
     registerGetServerActivityTool(server, client);
   }
+  registerExtraTools(server, client);
   return server;
 }
 
