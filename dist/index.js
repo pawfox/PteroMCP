@@ -393,8 +393,15 @@ async function getNest(request, nestId) {
 }
 
 // src/client/circuit-breaker.ts
-var DEFAULT_FAILURE_THRESHOLD = 5;
-var DEFAULT_COOLDOWN_MS = 3e4;
+function envInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === void 0 || raw === "") return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+// Tunable via PTERODACTYL_BREAKER_THRESHOLD (0 disables the breaker) and PTERODACTYL_BREAKER_COOLDOWN_MS.
+var DEFAULT_FAILURE_THRESHOLD = envInt("PTERODACTYL_BREAKER_THRESHOLD", 10);
+var DEFAULT_COOLDOWN_MS = envInt("PTERODACTYL_BREAKER_COOLDOWN_MS", 1e4);
 var CircuitBreaker = class {
   state = "CLOSED";
   consecutiveFailures = 0;
@@ -411,7 +418,7 @@ var CircuitBreaker = class {
    * Transitions to HALF_OPEN if cooldown has elapsed.
    */
   allowRequest() {
-    if (this.state === "CLOSED") {
+    if (this.failureThreshold === 0 || this.state === "CLOSED") {
       return;
     }
     if (this.state === "OPEN") {
@@ -438,6 +445,9 @@ var CircuitBreaker = class {
    * Record a failed request. Opens the circuit if the failure threshold is reached.
    */
   recordFailure() {
+    if (this.failureThreshold === 0) {
+      return;
+    }
     this.consecutiveFailures += 1;
     if (this.state === "HALF_OPEN") {
       this.state = "OPEN";
@@ -775,6 +785,7 @@ async function getServerActivity(request, clientKey, identifier, params) {
 
 // src/client/http-errors.ts
 var RETRYABLE_STATUS_CODES = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
+var BREAKER_STATUS_CODES = /* @__PURE__ */ new Set([502, 503, 504]);
 function parseRetryAfter(headerValue) {
   if (headerValue === null) {
     return void 0;
@@ -1292,6 +1303,7 @@ var PterodactylClient = class {
     const isIdempotent = options?.idempotent ?? IDEMPOTENT_METHODS.has(method.toUpperCase());
     let lastError;
     let retryAfterMs;
+    let sawBreakerFailure = false;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         if (!isIdempotent) {
@@ -1327,7 +1339,11 @@ var PterodactylClient = class {
         }
         const apiError = mapHttpError(response.status);
         if (RETRYABLE_STATUS_CODES.has(response.status)) {
-          this.circuitBreaker.recordFailure();
+          // Only gateway-level errors indicate an outage; 500 is usually endpoint-specific and 429 is
+          // throttling (handled by Retry-After), so neither should open the circuit.
+          if (BREAKER_STATUS_CODES.has(response.status)) {
+            sawBreakerFailure = true;
+          }
           lastError = apiError;
           if (response.status === 429) {
             retryAfterMs = parseRetryAfter(response.headers.get("Retry-After"));
@@ -1341,7 +1357,7 @@ var PterodactylClient = class {
           throw error;
         }
         if (error instanceof DOMException && error.name === "TimeoutError") {
-          this.circuitBreaker.recordFailure();
+          sawBreakerFailure = true;
           lastError = new PterodactylApiError(
             0,
             "TIMEOUT",
@@ -1350,7 +1366,7 @@ var PterodactylClient = class {
           continue;
         }
         if (this.isRetryableNetworkError(error)) {
-          this.circuitBreaker.recordFailure();
+          sawBreakerFailure = true;
           lastError = new PterodactylApiError(
             0,
             "NETWORK_ERROR",
@@ -1364,6 +1380,10 @@ var PterodactylClient = class {
           "Failed to connect to panel API. Check that the panel URL is correct and reachable."
         );
       }
+    }
+    // Record a single breaker failure per logical request (not one per retry attempt).
+    if (sawBreakerFailure) {
+      this.circuitBreaker.recordFailure();
     }
     throw lastError ?? new PterodactylApiError(0, "API_ERROR", "Request failed after multiple retries.");
   }

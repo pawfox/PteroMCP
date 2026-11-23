@@ -92,6 +92,8 @@ Set these environment variables:
 | `PTERODACTYL_URL` | Yes | Your Pterodactyl Panel URL |
 | `PTERODACTYL_APP_KEY` | Yes | Application API key (starts with `ptla_`) |
 | `PTERODACTYL_CLIENT_KEY` | No | Client API key (starts with `ptlc_`) for power/files/console tools |
+| `PTERODACTYL_BREAKER_THRESHOLD` | No | Consecutive failed requests (502/503/504, timeouts, network errors) before the circuit breaker opens. Default `10`; `0` disables it |
+| `PTERODACTYL_BREAKER_COOLDOWN_MS` | No | How long the breaker stays open before retrying. Default `10000` |
 
 ## Usage with Claude Desktop / Claude Code / Cursor
 
